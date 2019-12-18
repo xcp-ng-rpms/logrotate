@@ -1,0 +1,209 @@
+diff --git a/logrotate.c b/logrotate.c
+index 174a26b..4ef044e 100644
+--- a/logrotate.c
++++ b/logrotate.c
+@@ -77,6 +77,11 @@ struct logNames {
+     char *baseName;
+ };
+ 
++struct compData {
++	int prefix_len;
++	const char *dformat;
++};
++
+ struct logStates {
+ 	LIST_HEAD(stateSet, logState) head;
+ } **states;
+@@ -142,6 +147,34 @@ int switch_user_permanently(const struct logInfo *log) {
+ 	return 0;
+ }
+ 
++static int compGlobResult(const void *result1, const void *result2, void *data)  {
++	struct tm time;
++	time_t t1, t2;
++	struct compData *d = (struct compData *) data;
++	const char *r1 = *(const char **)(result1);
++	const char *r2 = *(const char **)(result2);
++
++	memset(&time, 0, sizeof(struct tm));
++	strptime(r1 + d->prefix_len, d->dformat, &time);
++	t1 = mktime(&time);
++
++	memset(&time, 0, sizeof(struct tm));
++	strptime(r2 + d->prefix_len, d->dformat, &time);
++	t2 = mktime(&time);
++
++	if (t1 < t2) return -1;
++	if (t1 > t2) return  1;
++	return 0;
++}
++
++static void sortGlobResult(glob_t *result, int prefix_len, const char *dformat) {
++	struct compData d;
++	if (!dformat || *dformat == '\0') return;
++	d.prefix_len = prefix_len;
++	d.dformat = dformat;
++	qsort_r(result->gl_pathv, result->gl_pathc, sizeof(char *), compGlobResult, &d);
++}
++
+ static void unescape(char *arg)
+ {
+ 	char *p = arg;
+@@ -923,7 +956,7 @@ int prerotateSingleLog(struct logInfo *log, int logNum, struct logState *state,
+ #define DATEEXT_LEN 64
+ #define PATTERN_LEN (DATEEXT_LEN * 2)
+ 	char dext_str[DATEEXT_LEN];
+-	char dformat[DATEEXT_LEN];
++	char dformat[DATEEXT_LEN] = "";
+ 	char dext_pattern[PATTERN_LEN];
+ 	char *dext;
+ 
+@@ -1112,6 +1145,7 @@ int prerotateSingleLog(struct logInfo *log, int logNum, struct logState *state,
+ 		}
+ 	    rc = glob(glob_pattern, 0, globerr, &globResult);
+ 	    if (!rc && globResult.gl_pathc > 0) {
++		sortGlobResult(&globResult, strlen(rotNames->dirName) + 1 + strlen(rotNames->baseName), dformat);
+ 		for (i = 0; i < globResult.gl_pathc && !hasErrors; i++) {
+ 		    struct stat sbprev;
+ 
+@@ -1176,6 +1210,7 @@ int prerotateSingleLog(struct logInfo *log, int logNum, struct logState *state,
+ 	    /* remove the first (n - rotateCount) matches
+ 	     * no real rotation needed, since the files have
+ 	     * the date in their name */
++		sortGlobResult(&globResult, strlen(rotNames->dirName) + 1 + strlen(rotNames->baseName), dformat);
+ 	    for (i = 0; i < globResult.gl_pathc; i++) {
+ 		if (!stat((globResult.gl_pathv)[i], &fst_buf)) {
+ 		    if ((i <= ((int) globResult.gl_pathc - rotateCount))
+diff --git a/test/test b/test/test
+index 793bf77..25b76a6 100755
+--- a/test/test
++++ b/test/test
+@@ -1347,4 +1347,73 @@ test.log 0
+ test.log.1 0 zero
+ EOF
+ 
++cleanup 54
++
++# ------------------------------- Test 54 ------------------------------------
++# removing last log file when using %Y-%m-%d
++rm -f *test.log*
++preptest test.log 54 1 0
++
++DATE=""
++for i in {1..60}
++do
++    DATE=$(/bin/date "+%Y-%m-%d" --date "$i day ago" 2>/dev/null)   
++    echo "x" > test.log-$DATE
++done
++
++$RLR test-config.54 --force
++
++if [ -e test.log-$DATE ]; then
++    echo "File test.log-$DATE should not exist (it should be deleted)"
++    exit 3
++fi
++
++rm -f *test.log*
++
++cleanup 55
++
++# ------------------------------- Test 55 ------------------------------------
++# removing last log file when using %s and hourly
++rm -f *test.log*
++preptest test.log 55 1 0
++
++DATE=""
++for i in {1..60}
++do
++    DATE=$(/bin/date "+%s" --date "$i hour ago" 2>/dev/null)   
++    echo "x" > test.log-$DATE.gz
++done
++
++$RLR test-config.55 --force
++
++if [ -e test.log-$DATE.gz ]; then
++    echo "File test.log-$DATE.gz should not exist (it should be deleted)"
++    exit 3
++fi
++
++rm -f *test.log*
++
++cleanup 56
++
++# ------------------------------- Test 56 ------------------------------------
++# removing last log file when using %d-%m-%Y
++rm -f *test.log*
++preptest test.log 56 1 0
++
++DATE=""
++for i in {1..60}
++do
++    DATE=$(/bin/date "+%d-%m-%Y" --date "$i day ago" 2>/dev/null)   
++    echo "x" > test.log-$DATE
++done
++
++$RLR test-config.56 --force
++
++if [ -e test.log-$DATE ]; then
++    echo "File test.log-$DATE should not exist (it should be deleted)"
++    exit 3
++fi
++
++rm -f *test.log*
++
+ cleanup
+diff --git a/test/test-config.54.in b/test/test-config.54.in
+new file mode 100644
+index 0000000..c946af1
+--- /dev/null
++++ b/test/test-config.54.in
+@@ -0,0 +1,8 @@
++create
++
++&DIR&/test.log {
++    daily
++	dateext
++	dateformat -%Y-%m-%d
++    rotate 60
++}
+diff --git a/test/test-config.55.in b/test/test-config.55.in
+new file mode 100644
+index 0000000..8b10ad1
+--- /dev/null
++++ b/test/test-config.55.in
+@@ -0,0 +1,21 @@
++create
++
++# continue and throw no error message when log file is not present
++missingok
++
++# truncate the original log file in place after creating a copy
++copytruncate
++
++# compress the file
++compress
++
++# do only rotate when not empty
++notifempty
++
++&DIR&/test.log {
++    hourly
++	dateext
++	dateformat -%s
++    rotate 60
++    nosharedscripts
++}
+diff --git a/test/test-config.56.in b/test/test-config.56.in
+new file mode 100644
+index 0000000..adaf2a5
+--- /dev/null
++++ b/test/test-config.56.in
+@@ -0,0 +1,8 @@
++create
++
++&DIR&/test.log {
++    daily
++	dateext
++	dateformat -%d-%m-%Y
++    rotate 60
++}

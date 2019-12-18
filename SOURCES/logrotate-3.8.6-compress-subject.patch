@@ -1,0 +1,139 @@
+diff --git a/logrotate.c b/logrotate.c
+index 4ef044e..9faf341 100644
+--- a/logrotate.c
++++ b/logrotate.c
+@@ -662,22 +662,20 @@ static int mailLog(struct logInfo *log, char *logFile, char *mailCommand,
+ static int mailLogWrapper(char *mailFilename, char *mailCommand,
+ 			  int logNum, struct logInfo *log)
+ {
+-    /* if the log is compressed (and we're not mailing a
+-     * file whose compression has been delayed), we need
+-     * to uncompress it */
+-    if ((log->flags & LOG_FLAG_COMPRESS) &&
+-	!((log->flags & LOG_FLAG_DELAYCOMPRESS) &&
+-	  (log->flags & LOG_FLAG_MAILFIRST))) {
+-	if (mailLog(log, mailFilename, mailCommand,
+-		    log->uncompress_prog, log->logAddress,
+-		    log->files[logNum]))
+-	    return 1;
+-    } else {
+-	if (mailLog(log, mailFilename, mailCommand, NULL,
+-		    log->logAddress, mailFilename))
+-	    return 1;
+-    }
+-    return 0;
++	/* if the log is compressed (and we're not mailing a
++	* file whose compression has been delayed), we need
++	* to uncompress it */
++	if ((log->flags & LOG_FLAG_COMPRESS) && !(log->flags & LOG_FLAG_DELAYCOMPRESS)) {
++		if (mailLog(log, mailFilename, mailCommand,
++			log->uncompress_prog, log->logAddress,
++			(log->flags & LOG_FLAG_MAILFIRST) ? log->files[logNum] : mailFilename))
++			return 1;
++	} else {
++		if (mailLog(log, mailFilename, mailCommand, NULL,
++			log->logAddress, mailFilename))
++			return 1;
++	}
++	return 0;
+ }
+ 
+ static int copyTruncate(char *currLog, char *saveLog, struct stat *sb,
+diff --git a/test/test b/test/test
+index e9ce46f..f7f3cf4 100755
+--- a/test/test
++++ b/test/test
+@@ -132,6 +132,9 @@ createlogs() {
+ 
+ checkmail() {
+     (echo -s $PWD/$1 user@myhost.org; echo $2) | diff -u - mail-out
++    if [ $? != 0 ]; then
++        exit 5
++    fi
+ }
+ 
+ checkoutput() {
+@@ -429,7 +432,7 @@ test.log 0
+ scriptout 0 foo
+ EOF
+ 
+-checkmail test.log first
++checkmail test.log.2.gz first
+ 
+ # check rotation into a directory given as a relative pathname
+ cleanup 12
+@@ -1424,4 +1427,37 @@ fi
+ 
+ rm -f *test.log*
+ 
++cleanup 64
++
++# ------------------------------- Test 64 ------------------------------------
++# filename in mail's subject with compress directive and maillast directive
++# should be the name of the removed log
++preptest test.log 64 1 0
++
++DATESTRING=$(/bin/date +%Y%m%d)
++
++$RLR test-config.64 --force
++checkoutput <<EOF
++test.log 0
++EOF
++
++checkmail test.log-$DATESTRING.gz zero
++
++cleanup 65
++
++# ------------------------------- Test 65 ------------------------------------
++# filename in mail's subject without compress directive and maillast directive
++# should be the name of the removed log
++preptest test.log 65 1 0
++
++DATESTRING=$(/bin/date +%Y%m%d)
++
++$RLR test-config.65 --force
++checkoutput <<EOF
++test.log 0
++EOF
++
++checkmail test.log-$DATESTRING zero
++
++
+ cleanup
+diff --git a/test/test-config.64.in b/test/test-config.64.in
+new file mode 100644
+index 0000000..c817734
+--- /dev/null
++++ b/test/test-config.64.in
+@@ -0,0 +1,13 @@
++create
++
++&DIR&/test.log {
++    daily
++    dateext
++    dateformat -%Y%m%d
++    rotate 0
++    compress
++    nosharedscripts
++    dateext
++    mail user@myhost.org
++    maillast
++}
+diff --git a/test/test-config.65.in b/test/test-config.65.in
+new file mode 100644
+index 0000000..19007f5
+--- /dev/null
++++ b/test/test-config.65.in
+@@ -0,0 +1,12 @@
++create
++
++&DIR&/test.log {
++    daily
++    dateext
++    dateformat -%Y%m%d
++    rotate 0
++    nosharedscripts
++    dateext
++    mail user@myhost.org
++    maillast
++}

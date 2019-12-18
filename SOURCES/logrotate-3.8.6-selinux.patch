@@ -1,0 +1,234 @@
+From e90a98395a8c4bc265067519c450360481dff1f3 Mon Sep 17 00:00:00 2001
+From: Kamil Dudka <kdudka@redhat.com>
+Date: Tue, 11 Oct 2016 18:41:56 +0200
+Subject: [PATCH 1/2] copyTruncate: factor out handling of SELinux context
+
+... to separate functions
+
+Closes #72
+
+Upstream-commit: c5bff8adcece162746c68834fa1526dd45ca7bd0
+Signed-off-by: Kamil Dudka <kdudka@redhat.com>
+---
+ logrotate.c | 117 ++++++++++++++++++++++++++++++++++++++----------------------
+ 1 file changed, 74 insertions(+), 43 deletions(-)
+
+diff --git a/logrotate.c b/logrotate.c
+index 2abac3d..6270995 100644
+--- a/logrotate.c
++++ b/logrotate.c
+@@ -251,6 +251,72 @@ static unsigned hashIndex(const char *fn)
+ 	return hash % hashSize;
+ }
+ 
++static int setSecCtx(int fdSrc, const char *src, void **pPrevCtx)
++{
++#ifdef WITH_SELINUX
++    security_context_t srcCtx;
++    *pPrevCtx = NULL;
++
++    if (!selinux_enabled)
++	/* pretend success */
++	return 0;
++
++    /* read security context of fdSrc */
++    if (fgetfilecon_raw(fdSrc, &srcCtx) < 0) {
++	if (errno == ENOTSUP)
++	    /* pretend success */
++	    return 0;
++
++	message(MESS_ERROR, "getting file context %s: %s\n", src,
++		strerror(errno));
++	return selinux_enforce;
++    }
++
++    /* save default security context for restoreSecCtx() */
++    if (getfscreatecon_raw((security_context_t *)pPrevCtx) < 0) {
++	message(MESS_ERROR, "getting default context: %s\n", strerror(errno));
++	return selinux_enforce;
++    }
++
++    /* set default security context to match fdSrc */
++    if (setfscreatecon_raw(srcCtx) < 0) {
++	message(MESS_ERROR, "setting default context to %s: %s\n", srcCtx,
++		strerror(errno));
++	freecon(srcCtx);
++	return selinux_enforce;
++    }
++
++    message(MESS_DEBUG, "set default create context to %s\n", srcCtx);
++    freecon(srcCtx);
++#else
++    (void) fdSrc;
++    (void) src;
++    (void) pPrevCtx;
++#endif
++    return 0;
++}
++
++static void restoreSecCtx(void **pPrevCtx)
++{
++#ifdef WITH_SELINUX
++    const security_context_t prevCtx = (security_context_t) *pPrevCtx;
++    if (!prevCtx)
++	/* no security context saved for restoration */
++	return;
++
++    /* set default security context to the previously stored one */
++    if (selinux_enabled && setfscreatecon_raw(prevCtx) < 0)
++	message(MESS_ERROR, "setting default context to %s: %s\n", prevCtx,
++		strerror(errno));
++
++    /* free the memory allocated to save the security context */
++    freecon(prevCtx);
++    *pPrevCtx = NULL;
++#else
++    (void) pPrevCtx;
++#endif
++}
++
+ static struct logState *newState(const char *fn)
+ {
+ 	struct tm now = *localtime(&nowSecs);
+@@ -679,6 +745,7 @@ static int copyTruncate(char *currLog, char *saveLog, struct stat *sb,
+ {
+     char buf[BUFSIZ];
+     int fdcurr = -1, fdsave = -1;
++    void *prevCtx;
+     ssize_t cnt;
+ 
+     message(MESS_DEBUG, "copying %s to %s\n", currLog, saveLog);
+@@ -689,48 +756,18 @@ static int copyTruncate(char *currLog, char *saveLog, struct stat *sb,
+ 		    strerror(errno));
+ 	    return 1;
+ 	}
+-#ifdef WITH_SELINUX
+-	if (selinux_enabled) {
+-	    security_context_t oldContext;
+-	    if (fgetfilecon_raw(fdcurr, &oldContext) >= 0) {
+-		if (getfscreatecon_raw(&prev_context) < 0) {
+-		    message(MESS_ERROR,
+-			    "getting default context: %s\n",
+-			    strerror(errno));
+-		    if (selinux_enforce) {
+-				freecon(oldContext);
+-				close(fdcurr);
+-				return 1;
+-		    }
+-		}
+-		if (setfscreatecon_raw(oldContext) < 0) {
+-		    message(MESS_ERROR,
+-			    "setting file context %s to %s: %s\n",
+-			    saveLog, oldContext, strerror(errno));
+-			if (selinux_enforce) {
+-				freecon(oldContext);
+-				close(fdcurr);
+-				return 1;
+-		    }
+-		}
+-		message(MESS_DEBUG, "set default create context\n");
+-		freecon(oldContext);
+-	    } else {
+-		    if (errno != ENOTSUP) {
+-			    message(MESS_ERROR, "getting file context %s: %s\n",
+-				    currLog, strerror(errno));
+-			    if (selinux_enforce) {
+-				    return 1;
+-			    }
+-		    }
+-	    }
++
++	if (setSecCtx(fdcurr, currLog, &prevCtx) != 0) {
++	    /* error msg already printed */
++	    close(fdcurr);
++	    return 1;
+ 	}
+-#endif
+ #ifdef WITH_ACL
+ 	if ((prev_acl = acl_get_fd(fdcurr)) == NULL) {
+ 		if (!ACL_NOT_WELL_SUPPORTED(errno)) {
+ 			message(MESS_ERROR, "getting file ACL %s: %s\n",
+ 				currLog, strerror(errno));
++			restoreSecCtx(&prevCtx);
+ 			close(fdcurr);
+ 			return 1;
+ 		}
+@@ -738,13 +775,7 @@ static int copyTruncate(char *currLog, char *saveLog, struct stat *sb,
+ #endif /* WITH_ACL */
+ 	fdsave =
+ 	    createOutputFile(saveLog, O_WRONLY | O_CREAT, sb, prev_acl, 0);
+-#ifdef WITH_SELINUX
+-	if (selinux_enabled) {
+-	    setfscreatecon_raw(prev_context);
+-		freecon(prev_context);
+-		prev_context = NULL;
+-	}
+-#endif
++	restoreSecCtx(&prevCtx);
+ #ifdef WITH_ACL
+ 	if (prev_acl) {
+ 		acl_free(prev_acl);
+-- 
+2.7.4
+
+
+From 0ed7a45533a3d9d2237c742a2de03faba1b2e35f Mon Sep 17 00:00:00 2001
+From: Kamil Dudka <kdudka@redhat.com>
+Date: Tue, 11 Oct 2016 18:53:18 +0200
+Subject: [PATCH 2/2] compressLogFile: explicitly preserve SELinux context
+
+If we use options 'compress' and 'sharedscripts' together, the rotated
+(and compressed) log files may end up with a wrong security context in
+case multiple files with different security contexts are rotated in a
+row.
+
+Closes #72
+
+Upstream-commit: 57458d5424eebf0c7912eefe955e4d7b0f49fd15
+Signed-off-by: Kamil Dudka <kdudka@redhat.com>
+---
+ logrotate.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/logrotate.c b/logrotate.c
+index 6270995..20f6ea5 100644
+--- a/logrotate.c
++++ b/logrotate.c
+@@ -558,6 +558,7 @@ static int compressLogFile(char *name, struct logInfo *log, struct stat *sb)
+     int outFile;
+     int i;
+     int status;
++    void *prevCtx;
+ 
+     message(MESS_DEBUG, "compressing log with: %s\n", log->compress_prog);
+     if (debug)
+@@ -578,11 +579,18 @@ static int compressLogFile(char *name, struct logInfo *log, struct stat *sb)
+ 	return 1;
+     }
+ 
++    if (setSecCtx(inFile, name, &prevCtx) != 0) {
++	/* error msg already printed */
++	close(inFile);
++	return 1;
++    }
++
+ #ifdef WITH_ACL
+ 	if ((prev_acl = acl_get_fd(inFile)) == NULL) {
+ 		if (!ACL_NOT_WELL_SUPPORTED(errno)) {
+ 			message(MESS_ERROR, "getting file ACL %s: %s\n",
+ 				name, strerror(errno));
++			restoreSecCtx(&prevCtx);
+ 			close(inFile);
+ 			return 1;
+ 		}
+@@ -591,6 +599,7 @@ static int compressLogFile(char *name, struct logInfo *log, struct stat *sb)
+ 
+     outFile =
+ 	createOutputFile(compressedName, O_RDWR | O_CREAT, sb, prev_acl, 0);
++    restoreSecCtx(&prevCtx);
+ #ifdef WITH_ACL
+ 	if (prev_acl) {
+ 		acl_free(prev_acl);
+-- 
+2.7.4
+

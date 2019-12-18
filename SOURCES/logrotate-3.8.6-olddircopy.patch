@@ -1,0 +1,14 @@
+diff --git a/config.c b/config.c
+index e9992e3..926d388 100644
+--- a/config.c
++++ b/config.c
+@@ -1488,7 +1488,8 @@ static int readConfigFile(const char *configFile, struct logInfo *defConfig)
+ 						}
+ 					}
+ 
+-					if (sb.st_dev != sb2.st_dev) {
++					if (sb.st_dev != sb2.st_dev
++						&& !(newlog->flags & (LOG_FLAG_COPYTRUNCATE | LOG_FLAG_COPY))) {
+ 						message(MESS_ERROR,
+ 							"%s:%d olddir %s and log file %s "
+ 							"are on different devices\n", configFile,

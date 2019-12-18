@@ -1,0 +1,272 @@
+diff --git a/logrotate.c b/logrotate.c
+index 9faf341..06b7100 100644
+--- a/logrotate.c
++++ b/logrotate.c
+@@ -62,11 +62,12 @@ extern int asprintf(char **str, const char *fmt, ...);
+ #endif
+ 
+ struct logState {
+-    char *fn;
+-    struct tm lastRotated;	/* only tm_hour, tm_mday, tm_mon, tm_year are good! */
+-    struct stat sb;
+-    int doRotate;
+-    LIST_ENTRY(logState) list;
++	char *fn;
++	struct tm lastRotated;	/* only tm_hour, tm_mday, tm_mon, tm_year are good! */
++	struct stat sb;
++	int doRotate;
++	int isUsed;	/* True if there is real log file in system for this state. */
++	LIST_ENTRY(logState) list;
+ };
+ 
+ struct logNames {
+@@ -204,23 +205,17 @@ static void unescape(char *arg)
+ }
+ 
+ #define HASH_SIZE_MIN 64
+-static int allocateHash(void)
++static int allocateHash(unsigned int hs)
+ {
+-	struct logInfo *log;
+-	unsigned int hs;
+ 	int i;
+ 
+-	hs = 0;
+-
+-	for (log = logs.tqh_first; log != NULL; log = log->list.tqe_next)
+-		hs += log->numFiles;
+-
+-	hs *= 2;
+-
+ 	/* Enforce some reasonable minimum hash size */
+ 	if (hs < HASH_SIZE_MIN)
+ 		hs = HASH_SIZE_MIN;
+ 
++	message(MESS_DEBUG, "Allocating hash table for state file, size %lu B\n",
++			hs * (sizeof(struct logStates *) + sizeof(struct logState) ) );
++
+ 	states = calloc(hs, sizeof(struct logStates *));
+ 	if (states == NULL) {
+ 		message(MESS_ERROR, "could not allocate memory for "
+@@ -271,6 +266,7 @@ static struct logState *newState(const char *fn)
+ 	}
+ 
+ 	new->doRotate = 0;
++	new->isUsed = 0;
+ 
+ 	memset(&new->lastRotated, 0, sizeof(new->lastRotated));
+ 	new->lastRotated.tm_hour = now.tm_hour;
+@@ -850,9 +846,10 @@ int findNeedRotating(struct logInfo *log, int logNum, int force)
+ 	return 1;
+     }
+ 
+-    state = findState(log->files[logNum]);
+-    state->doRotate = 0;
+-    state->sb = sb;
++	state = findState(log->files[logNum]);
++	state->doRotate = 0;
++	state->sb = sb;
++	state->isUsed = 1;
+ 
+ 	if ((sb.st_mode & S_IFMT) == S_IFLNK) {
+ 	    message(MESS_DEBUG, "  log %s is symbolic link. Rotation of symbolic"
+@@ -1820,6 +1817,8 @@ static int writeState(char *stateFilename)
+ 	int fdsave;
+ 	struct stat sb;
+ 	char *tmpFilename = NULL;
++	struct tm now = *localtime(&nowSecs);
++	time_t now_time, last_time;
+ 
+ 	tmpFilename = malloc(strlen(stateFilename) + 5 );
+ 	if (tmpFilename == NULL) {
+@@ -1924,9 +1923,22 @@ static int writeState(char *stateFilename)
+ 	if (bytes < 0)
+ 		error = bytes;
+ 
++#define SECONDS_IN_YEAR 31556926
++
+ 	for (i = 0; i < hashSize && error == 0; i++) {
+ 		for (p = states[i]->head.lh_first; p != NULL && error == 0;
+ 				p = p->list.le_next) {
++
++			/* Skip states which are not used for more than a year. */
++			now_time = mktime(&now);
++			last_time = mktime(&p->lastRotated);
++			if (!p->isUsed && difftime(now_time, last_time) > SECONDS_IN_YEAR) {
++				message(MESS_DEBUG, "Removing %s from state file, "
++					"because it does not exist and has not been rotated for one year\n",
++					p->fn);
++				continue;
++			}
++
+ 			error = fputc('"', f) == EOF;
+ 			for (chptr = p->fn; *chptr && error == 0; chptr++) {
+ 				switch (*chptr) {
+@@ -2010,23 +2022,27 @@ static int readState(char *stateFilename)
+ 
+     error = stat(stateFilename, &f_stat);
+ 
+-    if ((error && errno == ENOENT) || (!error && f_stat.st_size == 0)) {
+-	/* create the file before continuing to ensure we have write
+-	   access to the file */
+-	f = fopen(stateFilename, "w");
+-	if (!f) {
+-	    message(MESS_ERROR, "error creating state file %s: %s\n",
+-		    stateFilename, strerror(errno));
+-	    return 1;
++	if ((error && errno == ENOENT) || (!error && f_stat.st_size == 0)) {
++		/* create the file before continuing to ensure we have write
++		access to the file */
++		f = fopen(stateFilename, "w");
++		if (!f) {
++			message(MESS_ERROR, "error creating state file %s: %s\n",
++				stateFilename, strerror(errno));
++			return 1;
++		}
++		fprintf(f, "logrotate state -- version 2\n");
++		fclose(f);
++
++		if (allocateHash(64) != 0)
++			return 1;
++
++		return 0;
++	} else if (error) {
++		message(MESS_ERROR, "error stat()ing state file %s: %s\n",
++			stateFilename, strerror(errno));
++		return 1;
+ 	}
+-	fprintf(f, "logrotate state -- version 2\n");
+-	fclose(f);
+-	return 0;
+-    } else if (error) {
+-	message(MESS_ERROR, "error stat()ing state file %s: %s\n",
+-		stateFilename, strerror(errno));
+-	return 1;
+-    }
+ 
+     f = fopen(stateFilename, "r");
+     if (!f) {
+@@ -2050,6 +2066,13 @@ static int readState(char *stateFilename)
+ 	return 1;
+     }
+ 
++	/* Try to estimate how many state entries we have in the state file.
++	 * We expect single entry to have around 80 characters (Of course this is
++	 * just an estimation). During the testing I've found out that 200 entries
++	 * per single hash entry gives good mem/performance ratio. */
++	if (allocateHash(f_stat.st_size / 80 / 200) != 0)
++		return 1;
++
+     line++;
+ 
+     while (fgets(buf, sizeof(buf) - 1, f)) {
+@@ -2244,9 +2267,6 @@ int main(int argc, const char **argv)
+     poptFreeContext(optCon);
+     nowSecs = time(NULL);
+ 
+-	if (allocateHash() != 0)
+-		return 1;
+-
+ 	if (readState(stateFile))
+ 		exit(1);
+ 
+diff --git a/test/test b/test/test
+index f7f3cf4..4048197 100755
+--- a/test/test
++++ b/test/test
+@@ -1460,4 +1460,61 @@ EOF
+ checkmail test.log-$DATESTRING zero
+ 
+ 
++cleanup 67
++
++# ------------------------------- Test 67 ------------------------------------
++# firstaction and lastaction scripts should be called if no file is rotated
++preptest test.log 67 1 0
++
++DATESTRING=$(/bin/date +%Y%m%d)
++TODAY=$(/bin/date "+%Y-%m-%d" 2>/dev/null)
++
++echo removed > "test.log$TODAY"
++
++$RLR test-config.67 --force
++
++cat scriptout|grep firstaction >/dev/null
++if [ $? != 0 ]; then
++	echo "scriptout should contain 'firstaction'"
++	exit 3
++fi
++
++cat scriptout|grep lastaction >/dev/null
++if [ $? != 0 ]; then
++	echo "scriptout should contain 'lastaction'"
++	exit 3
++fi
++
++cleanup 68
++
++# ------------------------------- Test 68 ------------------------------------
++# Old state file entries should be removed when not used. Logrotate should
++# not freeze on big state file.
++preptest test.log 68 1 0
++
++cat > state << EOF
++logrotate state -- version 1
++"$PWD/test.log" 2000-1-1
++EOF
++
++for i in {1..200000}
++do
++   echo "\"$PWD/removed.log$i\" 2000-1-1" >> state
++done
++
++
++$RLR test-config.68 --force
++
++cat state|grep test.log >/dev/null
++if [ $? != 0 ]; then
++	echo "state file should contain 'test.log'"
++	exit 3
++fi
++
++cat state|grep removed.log >/dev/null
++if [ $? == 0 ]; then
++	echo "state file should not contain 'removed.log'"
++	exit 3
++fi
++
+ cleanup
+diff --git a/test/test-config.67.in b/test/test-config.67.in
+new file mode 100644
+index 0000000..69b9fff
+--- /dev/null
++++ b/test/test-config.67.in
+@@ -0,0 +1,16 @@
++create
++
++&DIR&/test.log {
++    daily
++    dateext
++    dateformat %Y-%m-%d
++    rotate 1
++
++	firstaction
++		echo "firstaction" > scriptout
++	endscript
++
++	lastaction
++		echo "lastaction" >> scriptout
++	endscript
++}
+diff --git a/test/test-config.68.in b/test/test-config.68.in
+new file mode 100644
+index 0000000..e8e1c79
+--- /dev/null
++++ b/test/test-config.68.in
+@@ -0,0 +1,6 @@
++create
++
++&DIR&/test.log {
++    daily
++    rotate 1
++}

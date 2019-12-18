@@ -1,0 +1,99 @@
+From 1787a97828b512b4b15e618a26d0e508ec7a253b Mon Sep 17 00:00:00 2001
+From: Jan Kaluza <jkaluza@redhat.com>
+Date: Tue, 26 Jan 2016 12:43:21 +0100
+Subject: [PATCH] Fix 'olddir' usage with wildcard in the middle of path in the
+ pattern definition when the pattern did not match any log file.
+
+Upstream-commit: 73493ec38c5e806fa66d8c3f13259775da6282d9
+Signed-off-by: Kamil Dudka <kdudka@redhat.com>
+---
+ config.c               | 24 ++++++++++++++++++------
+ test/test              | 21 +++++++++++++++++++++
+ test/test-config.69.in | 10 ++++++++++
+ 3 files changed, 49 insertions(+), 6 deletions(-)
+ create mode 100644 test/test-config.69.in
+
+diff --git a/config.c b/config.c
+index 926d388..493f3f7 100644
+--- a/config.c
++++ b/config.c
+@@ -1454,12 +1454,24 @@ static int readConfigFile(const char *configFile, struct logInfo *defConfig)
+ 					int rv;
+ 					dirName = ourDirName(newlog->files[i]);
+ 					if (stat(dirName, &sb2)) {
+-						message(MESS_ERROR,
+-							"%s:%d error verifying log file "
+-							"path %s: %s\n", configFile, lineNum,
+-							dirName, strerror(errno));
+-						free(dirName);
+-						goto error;
++						if (!(newlog->flags & LOG_FLAG_MISSINGOK)) {
++							message(MESS_ERROR,
++								"%s:%d error verifying log file "
++								"path %s: %s\n", configFile, lineNum,
++								dirName, strerror(errno));
++							free(dirName);
++							goto error;
++						}
++						else {
++							message(MESS_DEBUG,
++								"%s:%d verifying log file "
++								"path failed %s: %s, log is probably missing, "
++								"but missingok is set, so this is not an error.\n",
++								configFile, lineNum,
++								dirName, strerror(errno));
++							free(dirName);
++							continue;
++						}
+ 					}
+ 					ld = alloca(strlen(dirName) + strlen(newlog->oldDir) + 2);
+ 					sprintf(ld, "%s/%s", dirName, newlog->oldDir);
+diff --git a/test/test b/test/test
+index 9d7618f..54d57d2 100755
+--- a/test/test
++++ b/test/test
+@@ -1566,4 +1566,25 @@ test.log 0
+ test.log.$DATESTRING 0 zero
+ EOF
+ 
++cleanup 69
++
++# ------------------------------- Test 69 ------------------------------------
++# Test olddir with wildcard in the pattern
++preptest test.log 69 1 0
++rm -rf testdir adir bdir
++mkdir adir
++mkdir bdir
++cp test.log adir
++cp test.log bdir
++$RLR test-config.69 --force -v
++
++checkoutput <<EOF
++adir/test.log 0
++testdir/test.log.1 0 zero
++EOF
++
++rm -rf testdir adir
++rm -rf testdir bdir
++
+ cleanup
++
+diff --git a/test/test-config.69.in b/test/test-config.69.in
+new file mode 100644
+index 0000000..9752e0a
+--- /dev/null
++++ b/test/test-config.69.in
+@@ -0,0 +1,10 @@
++create
++
++&DIR&/*/test.log
++&DIR&/*/test.lo3 {
++    monthly
++    rotate 1
++    olddir &DIR&/testdir
++    createolddir 700 &USER& &GROUP&
++    missingok
++}
+-- 
+2.7.4
+

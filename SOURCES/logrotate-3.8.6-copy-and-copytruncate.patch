@@ -1,0 +1,69 @@
+From ba18db9a3c47f3283bb3493a84946fe27d7b1bc4 Mon Sep 17 00:00:00 2001
+From: Kamil Dudka <kdudka@redhat.com>
+Date: Tue, 20 Jun 2017 13:35:37 +0200
+Subject: [PATCH] make 'copy' and 'copytruncate' work together
+
+This commit fixes a regression introduced
+by 3b26f4d8bbb338981aa2796c4076792c63d850c0.
+
+Upstream-commit: 65faf212e51115699f55f491d464f0ead9c2047e
+Signed-off-by: Kamil Dudka <kdudka@redhat.com>
+---
+ logrotate.c            |  5 ++++-
+ test/test              | 13 +++++++++++++
+ test/test-config.73.in |  4 ++++
+ 3 files changed, 21 insertions(+), 1 deletion(-)
+ create mode 100644 test/test-config.73.in
+
+diff --git a/logrotate.c b/logrotate.c
+index 20f6ea5..d5da299 100644
+--- a/logrotate.c
++++ b/logrotate.c
+@@ -760,7 +760,10 @@ static int copyTruncate(char *currLog, char *saveLog, struct stat *sb,
+     message(MESS_DEBUG, "copying %s to %s\n", currLog, saveLog);
+ 
+     if (!debug) {
+-	if ((fdcurr = open(currLog, ((flags & LOG_FLAG_COPY) ? O_RDONLY : O_RDWR) | O_NOFOLLOW)) < 0) {
++	/* read access is sufficient for 'copy' but not for 'copytruncate' */
++	const int read_only = (flags & LOG_FLAG_COPY)
++	    && !(flags & LOG_FLAG_COPYTRUNCATE);
++	if ((fdcurr = open(currLog, ((read_only) ? O_RDONLY : O_RDWR) | O_NOFOLLOW)) < 0) {
+ 	    message(MESS_ERROR, "error opening %s: %s\n", currLog,
+ 		    strerror(errno));
+ 	    return 1;
+diff --git a/test/test b/test/test
+index 54d57d2..bcdfe05 100755
+--- a/test/test
++++ b/test/test
+@@ -1586,5 +1586,18 @@ EOF
+ rm -rf testdir adir
+ rm -rf testdir bdir
+ 
++cleanup 73
++
++# ------------------------------- Test 73 ------------------------------------
++# make sure that 'copy' and 'copytruncate' work together
++preptest test.log 73 2
++
++$RLR test-config.73 --force
++
++checkoutput <<EOF
++test.log 0
++test.log.1 0 zero
++EOF
++
+ cleanup
+ 
+diff --git a/test/test-config.73.in b/test/test-config.73.in
+new file mode 100644
+index 0000000..f3b7c87
+--- /dev/null
++++ b/test/test-config.73.in
+@@ -0,0 +1,4 @@
++&DIR&/test*.log {
++    copy
++    copytruncate
++}
+-- 
+2.13.5
+

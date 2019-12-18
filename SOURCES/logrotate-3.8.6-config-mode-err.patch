@@ -1,0 +1,29 @@
+From c8cd3cecb8c8191ba40ec6c6a835f03c5adc5068 Mon Sep 17 00:00:00 2001
+From: jkaluza <jkaluza@ec1272ba-9ed1-42ef-8245-99669996828e>
+Date: Fri, 7 Nov 2014 12:13:12 +0000
+Subject: [PATCH] Better error message when the config file has bad mode
+
+Upstream-commit: 367640762bef15ac0850113c591e3de7193c1764
+Signed-off-by: Kamil Dudka <kdudka@redhat.com>
+---
+ config.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/config.c b/config.c
+index 700ad85..2a610de 100644
+--- a/config.c
++++ b/config.c
+@@ -795,8 +795,8 @@ static int readConfigFile(const char *configFile, struct logInfo *defConfig)
+ 
+ 	if (getuid() == ROOT_UID) {
+ 		if ((sb.st_mode & 07533) != 0400) {
+-			message(MESS_DEBUG,
+-				"Ignoring %s because of bad file mode.\n",
++			message(MESS_ERROR,
++				"Ignoring %s because of bad file mode - must be 0644 or 0444.\n",
+ 				configFile);
+ 			close(fd);
+ 			return 0;
+-- 
+2.13.5
+

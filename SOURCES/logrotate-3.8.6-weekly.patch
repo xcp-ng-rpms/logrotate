@@ -1,0 +1,162 @@
+From 7cb2dde2b3423158f5cba06df0df078ab3bee09b Mon Sep 17 00:00:00 2001
+From: Kamil Dudka <kdudka@redhat.com>
+Date: Wed, 7 Dec 2016 16:34:13 +0100
+Subject: [PATCH] weekly: trigger the rotation more predictably
+
+... by ignoring the exact time.  If the (absolute) day counter
+advances by 7+ days since the last rotation, a new rotation is
+triggered.
+
+Additionally, introduce an optional argument of the 'weekly' directive
+to trigger the rotation on a selected day of the week.  If the argument
+is omitted, default to Sunday to preserve backward compatibility.
+
+Closes #93
+
+Upstream-commit: bd2638856dbbb6c0a47beb85fe8a8a628160772e
+Signed-off-by: Kamil Dudka <kdudka@redhat.com>
+---
+ config.c    | 19 +++++++++++++++++++
+ logrotate.8 | 12 ++++++------
+ logrotate.c | 39 +++++++++++++++++++++++++++++----------
+ logrotate.h |  3 ++-
+ 4 files changed, 56 insertions(+), 17 deletions(-)
+
+diff --git a/config.c b/config.c
+index 5e7951e..700ad85 100644
+--- a/config.c
++++ b/config.c
+@@ -410,6 +410,7 @@ static void copyLogInfo(struct logInfo *to, struct logInfo *from)
+     if (from->oldDir)
+ 	to->oldDir = strdup(from->oldDir);
+     to->criterium = from->criterium;
++    to->weekday = from->weekday;
+     to->threshhold = from->threshhold;
+     to->minsize = from->minsize;
+ 	to->maxsize = from->maxsize;
+@@ -1050,7 +1051,25 @@ static int readConfigFile(const char *configFile, struct logInfo *defConfig)
+ 				} else if (!strcmp(key, "monthly")) {
+ 					newlog->criterium = ROT_MONTHLY;
+ 				} else if (!strcmp(key, "weekly")) {
++					unsigned weekday;
++					char tmp;
+ 					newlog->criterium = ROT_WEEKLY;
++					free(key);
++					key = isolateLine(&start, &buf, length);
++					if (key == NULL || key[0] == '\0') {
++						/* default to Sunday if no argument was given */
++						newlog->weekday = 0;
++						continue;
++					}
++
++					if (1 == sscanf(key, "%u%c", &weekday, &tmp) && weekday <= 7) {
++						/* use the selected weekday, 7 means "once per week" */
++						newlog->weekday = weekday;
++						continue;
++					}
++					message(MESS_ERROR, "%s:%d bad weekly directive '%s'\n",
++							configFile, lineNum, key);
++					goto error;
+ 				} else if (!strcmp(key, "yearly")) {
+ 					newlog->criterium = ROT_YEARLY;
+ 				} else if (!strcmp(key, "rotate")) {
+diff --git a/logrotate.8 b/logrotate.8
+index 2db6f65..468ba0e 100644
+--- a/logrotate.8
++++ b/logrotate.8
+@@ -526,12 +526,12 @@ is replaced. At startup, the taboo extension list
+ contains .rpmsave, .rpmorig, ~, .disabled, .dpkg\-old, .dpkg\-dist, .dpkg\-new, .cfsaved, .ucf\-old, .ucf\-dist, .ucf\-new, .rpmnew, .swp, .cfsaved, .rhn\-cfg\-tmp\-*
+ 
+ .TP
+-\fBweekly\fR
+-Log files are rotated if the current weekday is less than the weekday
+-of the last rotation or if more than a week has passed since the last
+-rotation. This is normally the same as rotating logs on the first day
+-of the week, but it works better if \fIlogrotate\fR is not run every
+-night.
++\fBweekly\fR [\fIweekday\fR]
++Log files are rotated once each \fIweekday\fR, or if the date is advanced by at
++least 7 days since the last rotation (while ignoring the exact time).  The
++\fIweekday\fR intepretation is following:  0 means Sunday, 1 means Monday, ...,
++6 means Saturday; the special value 7 means each 7 days, irrespectively of
++weekday.  Defaults to 0 if the \fIweekday\fR argument is omitted.
+ 
+ .TP
+ \fByearly\fR
+diff --git a/logrotate.c b/logrotate.c
+index d5da299..e056ccd 100644
+--- a/logrotate.c
++++ b/logrotate.c
+@@ -842,6 +842,27 @@ static int copyTruncate(char *currLog, char *saveLog, struct stat *sb,
+     return 0;
+ }
+ 
++/* return value similar to mktime() but the exact time is ignored */
++static time_t mktimeFromDateOnly(const struct tm *src)
++{
++    /* explicit struct copy to retain C89 compatibility */
++    struct tm tmp;
++    memcpy(&tmp, src, sizeof tmp);
++
++    /* abstract out (nullify) fields expressing the exact time */
++    tmp.tm_hour = 0;
++    tmp.tm_min  = 0;
++    tmp.tm_sec  = 0;
++    return mktime(&tmp);
++}
++
++/* return by how many days the date was advanced but ignore exact time */
++static int daysElapsed(const struct tm *now, const struct tm *last)
++{
++    const time_t diff = mktimeFromDateOnly(now) - mktimeFromDateOnly(last);
++    return diff / (24 * 3600);
++}
++
+ int findNeedRotating(struct logInfo *log, int logNum, int force)
+ {
+     struct stat sb;
+@@ -924,18 +945,16 @@ int findNeedRotating(struct logInfo *log, int logNum, int force)
+ 	       state->lastRotated.tm_mon != now.tm_mon ||
+ 	       state->lastRotated.tm_mday != now.tm_mday ||
+ 	       state->lastRotated.tm_hour != now.tm_hour) {
++	int days;
+ 	switch (log->criterium) {
+ 	case ROT_WEEKLY:
+-	    /* rotate if:
+-	       1) the current weekday is before the weekday of the
+-	       last rotation
+-	       2) more then a week has passed since the last
+-	       rotation */
+-	    state->doRotate = ((now.tm_wday < state->lastRotated.tm_wday)
+-			       ||
+-			       ((mktime(&now) -
+-				 mktime(&state->lastRotated)) >
+-				(7 * 24 * 3600)));
++	    days = daysElapsed(&now, &state->lastRotated);
++	    /* rotate if date is advanced by 7+ days (exact time is ignored) */
++	    state->doRotate = (days >= 7)
++		/* ... or if we have not yet rotated today */
++		|| (days >= 1
++			/* ... and the selected weekday is today */
++			&& now.tm_wday == log->weekday);
+ 	    if (!state->doRotate) {
+ 	    message(MESS_DEBUG, "  log does not need rotating "
+ 		    "(log has been rotated at %d-%d-%d %d:%d, "
+diff --git a/logrotate.h b/logrotate.h
+index cf42703..f2d2103 100644
+--- a/logrotate.h
++++ b/logrotate.h
+@@ -36,8 +36,9 @@ struct logInfo {
+     char *oldDir;
+     enum { ROT_HOURLY, ROT_DAYS, ROT_WEEKLY, ROT_MONTHLY, ROT_YEARLY, ROT_SIZE
+             } criterium;
++    int weekday; /* used by ROT_WEEKLY only */
+     unsigned long long threshhold;
+-	unsigned long long maxsize;
++    unsigned long long maxsize;
+     unsigned long long minsize;
+     int rotateCount;
+     int rotateAge;
+-- 
+2.13.5
+

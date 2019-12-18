@@ -1,0 +1,30 @@
+From 1e927a16dcfb3db05b12c4059bcb8f98928baafa Mon Sep 17 00:00:00 2001
+From: jkaluza <jkaluza@ec1272ba-9ed1-42ef-8245-99669996828e>
+Date: Mon, 16 Feb 2015 07:42:18 +0000
+Subject: [PATCH] Fix crash when using long dateformat [nmerdan]
+
+Upstream-commit: 768b23c0bd94f973abf108f6e2cf4138c426f140
+Signed-off-by: Kamil Dudka <kdudka@redhat.com>
+---
+ logrotate.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/logrotate.c b/logrotate.c
+index 82f561a..2abac3d 100644
+--- a/logrotate.c
++++ b/logrotate.c
+@@ -1233,9 +1233,10 @@ int prerotateSingleLog(struct logInfo *log, int logNum, struct logState *state,
+ 	}
+     }
+ 
++    /* adding 2 due to / and \0 being added by snprintf */
+     rotNames->firstRotated =
+ 	malloc(strlen(rotNames->dirName) + strlen(rotNames->baseName) +
+-	       strlen(fileext) + strlen(compext) + 30);
++	       strlen(fileext) + strlen(compext) + DATEEXT_LEN + 2 );
+ 
+     if (log->flags & LOG_FLAG_DATEEXT) {
+ 	/* glob for compressed files with our pattern
+-- 
+2.7.4
+

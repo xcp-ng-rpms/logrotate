@@ -1,0 +1,36 @@
+From d37f48f732cd83792c1af156bd8d5c7cc7e12f39 Mon Sep 17 00:00:00 2001
+From: Kamil Dudka <kdudka@redhat.com>
+Date: Tue, 2 Aug 2016 16:54:20 +0200
+Subject: [PATCH] logrotate.8: update references to project page
+
+Reported-by: Paul Campbell
+Bug: https://bugzilla.redhat.com/1357215
+
+Upstream-commit: bd0edbb4f820abe424b75c8427a6b2e488265eca
+Signed-off-by: Kamil Dudka <kdudka@redhat.com>
+---
+ logrotate.8 | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/logrotate.8 b/logrotate.8
+index 468ba0e..e48dd0b 100644
+--- a/logrotate.8
++++ b/logrotate.8
+@@ -549,12 +549,12 @@ Configuration options.
+ .SH SEE ALSO
+ .BR gzip (1)
+ 
+-<http://fedorahosted.org/logrotate/>
++<https://github.com/logrotate/logrotate>
+ 
+ .SH AUTHORS
+ .nf
+ Erik Troan, Preston Brown, Jan Kaluza.
+ 
+-<logrotate-owner@fedoraproject.org>
++<https://github.com/logrotate/logrotate>
+ 
+ .fi
+-- 
+2.13.5
+

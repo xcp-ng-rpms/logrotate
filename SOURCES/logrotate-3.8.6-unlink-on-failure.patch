@@ -1,0 +1,43 @@
+From 733a43731739ecf2b8b405eab6868e7912d779a9 Mon Sep 17 00:00:00 2001
+From: Jan Kaluza <jkaluza@redhat.com>
+Date: Mon, 25 Jan 2016 11:04:05 +0100
+Subject: [PATCH] Remove half-rotated files when rotation of particular log
+ file is skipped because of an error during copy or compression.
+
+Upstream-commit: e349752ccbbfa9ae8480ca504ded3af87e718298
+Signed-off-by: Kamil Dudka <kdudka@redhat.com>
+---
+ logrotate.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/logrotate.c b/logrotate.c
+index fabfde9..f13d140 100644
+--- a/logrotate.c
++++ b/logrotate.c
+@@ -633,6 +633,7 @@ static int compressLogFile(char *name, struct logInfo *log, struct stat *sb)
+     if (!WIFEXITED(status) || WEXITSTATUS(status)) {
+ 	message(MESS_ERROR, "failed to compress log %s\n", name);
+ 	close(inFile);
++	unlink(compressedName);
+ 	return 1;
+     }
+ 
+@@ -805,6 +806,7 @@ static int copyTruncate(char *currLog, char *saveLog, struct stat *sb,
+ 			saveLog, strerror(errno));
+ 		close(fdcurr);
+ 		close(fdsave);
++		unlink(saveLog);
+ 		return 1;
+ 	    }
+ 	}
+@@ -813,6 +815,7 @@ static int copyTruncate(char *currLog, char *saveLog, struct stat *sb,
+ 		    currLog, strerror(errno));
+ 	    close(fdcurr);
+ 	    close(fdsave);
++	    unlink(saveLog);
+ 	    return 1;
+ 	}
+     }
+-- 
+2.14.4
+

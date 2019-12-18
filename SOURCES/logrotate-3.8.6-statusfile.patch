@@ -1,0 +1,61 @@
+From 42c95eacd3eb37f7846967295908fc4a9db81713 Mon Sep 17 00:00:00 2001
+From: Kamil Dudka <kdudka@redhat.com>
+Date: Tue, 24 Jan 2017 18:26:32 +0100
+Subject: [PATCH] Resolves: #1381719 - make /var/lib/logrotate/logrotate.status
+ the default state file
+
+---
+ config.h                | 2 +-
+ examples/logrotate.cron | 2 +-
+ logrotate.8             | 5 +++--
+ 3 files changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/config.h b/config.h
+index d715c5a..31f21aa 100644
+--- a/config.h
++++ b/config.h
+@@ -43,5 +43,5 @@
+ #endif
+ 
+ #ifndef STATEFILE
+-#define STATEFILE "/var/lib/logrotate.status"
++#define STATEFILE "/var/lib/logrotate/logrotate.status"
+ #endif
+diff --git a/examples/logrotate.cron b/examples/logrotate.cron
+index c6d50d4..967932e 100644
+--- a/examples/logrotate.cron
++++ b/examples/logrotate.cron
+@@ -1,6 +1,6 @@
+ #!/bin/sh
+ 
+-/usr/sbin/logrotate /etc/logrotate.conf
++/usr/sbin/logrotate -s /var/lib/logrotate/logrotate.status /etc/logrotate.conf
+ EXITVALUE=$?
+ if [ $EXITVALUE != 0 ]; then
+     /usr/bin/logger -t logrotate "ALERT exited abnormally with [$EXITVALUE]"
+diff --git a/logrotate.8 b/logrotate.8
+index 2cd2370..756e655 100644
+--- a/logrotate.8
++++ b/logrotate.8
+@@ -59,7 +59,8 @@ and mail it to the recipient. The default mail command is \fB/bin/mail
+ \fB\-s\fR, \fB\-\-state <statefile>\fR
+ Tells \fBlogrotate\fR to use an alternate state file.  This is useful
+ if logrotate is being run as a different user for various sets of
+-log files.  The default state file is \fI/var/lib/logrotate.status\fR.
++log files.  The default state file is
++\fI/var/lib/logrotate/logrotate.status\fR.
+ 
+ .TP
+ \fB\-\-usage\fR
+@@ -538,7 +539,7 @@ Log files are rotated if the current year is not the same as the last rotation.
+ .SH FILES
+ .PD 0
+ .TP 27
+-\fI/var/lib/logrotate.status\fR
++\fI/var/lib/logrotate/logrotate.status\fR
+ Default state file.
+ .TP 27
+ \fI/etc/logrotate.conf\fR
+-- 
+2.7.4
+

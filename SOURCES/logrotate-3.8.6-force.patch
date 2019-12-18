@@ -1,0 +1,52 @@
+Index: /trunk/logrotate.c
+===================================================================
+--- trunk/logrotate.c	(revision 437)
++++ trunk/logrotate.c	(revision 438)
+@@ -831,9 +831,10 @@
+ 	}
+ 
+-    if (log->criterium == ROT_SIZE) {
++    if (force) {
++	/* user forced rotation of logs from command line */
++	state->doRotate = 1;   
++    }
++    else if (log->criterium == ROT_SIZE) {
+ 	state->doRotate = (sb.st_size >= log->threshhold);
+-    } else if (force) {
+-	/* user forced rotation of logs from command line */
+-	state->doRotate = 1;
+     } else if (mktime(&state->lastRotated) - mktime(&now) > (25 * 3600)) {
+         /* 25 hours allows for DST changes as well as geographical moves */
+Index: /trunk/test/test
+===================================================================
+--- trunk/test/test	(revision 437)
++++ trunk/test/test	(revision 438)
+@@ -1335,3 +1335,16 @@
+ EOF
+ 
++cleanup 53
++
++# ------------------------------- Test 53 ------------------------------------
++# test if --force works
++preptest test.log 53 1 0
++
++$RLR test-config.53 --force
++
++checkoutput <<EOF
++test.log 0
++test.log.1 0 zero
++EOF
++
+ cleanup
+Index: /trunk/test/test-config.53.in
+===================================================================
+--- trunk/test/test-config.53.in	(revision 438)
++++ trunk/test/test-config.53.in	(revision 438)
+@@ -0,0 +1,7 @@
++create
++
++&DIR&/test.log {
++	rotate 14
++	size 4096
++	missingok
++}

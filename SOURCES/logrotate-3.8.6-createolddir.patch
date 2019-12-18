@@ -1,0 +1,88 @@
+From 562a8089369f78cd9a07b41c44a149abf72b02a8 Mon Sep 17 00:00:00 2001
+From: Bertrand Jacquin <bertrand@jacquin.bzh>
+Date: Mon, 19 Sep 2016 02:25:33 +0100
+Subject: [PATCH 1/2] config.c: drop comparison of uid/gid with undetermined
+ values
+
+... loaded from uninitialized stat buffer on the stack of do_mkdir()
+
+If a directory is created (ie createolddir), struct sb must be updated
+in order to get appropriate st_uid and st_gid. Test made later to known
+if chown() should be performed is inadequate since sb is never updated.
+
+As per discussion in https://github.com/logrotate/logrotate/pull/59,
+removing the comparison to unsure newly created directory always get
+owner and group changed.
+
+Before:
+  ./logrotate  -f /etc/logrotate.conf
+  uid: 250, sb.st_uid: 250
+  gid: 250, sb.st_gid: 250
+
+After:
+  ./logrotate  -f /etc/logrotate.conf
+  uid: 250, sb.st_uid: 0
+  gid: 250, sb.st_gid: 250
+
+Closes #59
+
+Upstream-commit: ae040a55d3a8f2bbce7860415b4ee479a024a334
+Signed-off-by: Kamil Dudka <kdudka@redhat.com>
+---
+ config.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/config.c b/config.c
+index 493f3f7..e692ac9 100644
+--- a/config.c
++++ b/config.c
+@@ -313,8 +313,7 @@ static int do_mkdir(const char *path, mode_t mode, uid_t uid, gid_t gid) {
+ 				path, strerror(errno));
+ 			return -1;
+ 		}
+-		if ((uid != sb.st_uid || gid != sb.st_gid) && 
+-			chown(path, uid, gid)) {
++		if (chown(path, uid, gid) != 0) {
+ 			message(MESS_ERROR, "error setting owner of %s to uid %d and gid %d: %s\n",
+ 				path, uid, gid, strerror(errno));
+ 			return -1;
+-- 
+2.7.4
+
+
+From d6962e20c9043152b63df6c1ca1de14161caa725 Mon Sep 17 00:00:00 2001
+From: Kamil Dudka <kdudka@redhat.com>
+Date: Tue, 20 Sep 2016 18:56:24 +0200
+Subject: [PATCH 2/2] config.c: make 'createolddir' preserve sticky bit
+
+After calling chown() to set uid/gid on the created directory, re-apply
+permission bits once again by chmod() because the sticky bit might have
+been cleared by chown().
+
+Upstream-commit: 3c76f48efa0d9d448528af3e40f757654458978c
+Signed-off-by: Kamil Dudka <kdudka@redhat.com>
+---
+ config.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/config.c b/config.c
+index e692ac9..64bb935 100644
+--- a/config.c
++++ b/config.c
+@@ -318,7 +318,12 @@ static int do_mkdir(const char *path, mode_t mode, uid_t uid, gid_t gid) {
+ 				path, uid, gid, strerror(errno));
+ 			return -1;
+ 		}
+-    }
++		if (chmod(path, mode) != 0) {
++			message(MESS_ERROR, "error setting permissions of %s to 0%o: %s\n",
++				path, mode, strerror(errno));
++			return -1;
++		}
++	}
+ 	else if (!S_ISDIR(sb.st_mode)) {
+ 		message(MESS_ERROR, "path %s already exists, but it is not a directory\n",
+ 			path);
+-- 
+2.7.4
+
