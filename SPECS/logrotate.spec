@@ -65,6 +65,7 @@ Provides: gitsha(https://code.citrite.net/rest/archive/latest/projects/XS/repos/
 
 Requires: coreutils >= 5.92 popt
 BuildRequires: libselinux-devel popt-devel libacl-devel acl
+BuildRequires: gcc
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 %description
