@@ -1,7 +1,7 @@
 Summary: Rotates, compresses, removes and mails system log files
 Name: logrotate
 Version: 3.8.6
-Release: 17.xs1.0.0
+Release: 17.xs1.0.1
 License: GPL+
 Group: System Environment/Base
 URL: https://github.com/logrotate/logrotate
@@ -31,10 +31,11 @@ Patch19: SOURCES/logrotate/logrotate-3.8.6-monthly-dst.patch
 Patch20: SOURCES/logrotate/logrotate-3.8.6-unlink-on-failure.patch
 
 Patch21: 0001-createOutputFile-rename-already-existing-file.patch
+Patch22: remove-tests-which-break-on-overlayfs
 
-Provides: gitsha(https://code.citrite.net/rest/archive/latest/projects/XSU/repos/logrotate.centos/archive?at=imports%2Fc7%2Flogrotate-3.8.6-17.el7&format=tar.gz#/logrotate-3.8.6.centos.tar.gz) = 9b6d9a7c9dfa87a4096450ba21f2ff499be103e9
 Provides: gitsha(https://code.citrite.net/rest/archive/latest/projects/XSU/repos/logrotate/archive?at=r3-8-6&format=tar.gz&prefix=logrotate-3.8.6#/logrotate-3.8.6.tar.gz) = afc48fb5fc0c159dbfd48d19ddea57cc1ba436b6
-Provides: gitsha(https://code.citrite.net/rest/archive/latest/projects/XS/repos/logrotate.pg/archive?at=v1.0.0&format=tar#/logrotate-v1.0.0.pg.tar) = 9e679548d23014deb803f5d223ca158c26bcd45a
+Provides: gitsha(https://code.citrite.net/rest/archive/latest/projects/XSU/repos/logrotate.centos/archive?at=imports%2Fc7%2Flogrotate-3.8.6-17.el7&format=tar.gz#/logrotate-3.8.6.centos.tar.gz) = 9b6d9a7c9dfa87a4096450ba21f2ff499be103e9
+Provides: gitsha(https://code.citrite.net/rest/archive/latest/projects/XS/repos/logrotate.pg/archive?at=v1.0.1&format=tar#/logrotate-v1.0.1.pg.tar) = 2f4fc5ba0640e588daefde7a7d4b69fc0bb4ff80
 
 
 # fix #1381719 - make /var/lib/logrotate/logrotate.status the default state file
@@ -128,6 +129,9 @@ rm -rf $RPM_BUILD_ROOT
 %config(noreplace) %{_sysconfdir}/rwtab.d/logrotate
 
 %changelog
+* Wed Nov 06 2019 Tim Smith <tim.smith@citrix.com> - 3.8.6-17.xs1.0.1
+- CA-330296: Temporarily disable tests which fail on overlayfs
+
 * Thu Oct 10 2019 Ross Lagerwall <ross.lagerwall@citrix.com> - 3.8.6-17.xs1.0.0
 - CA-328133: Do not fail if output file exists unexpectedly
 
