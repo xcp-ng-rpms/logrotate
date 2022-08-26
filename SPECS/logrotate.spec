@@ -1,71 +1,45 @@
+%global package_speccommit 87cf13be177f6da9eced6bedaedee8a73390f9a7
+%global usver 3.8.6
+%global xsver 20
+%global xsrel %{xsver}%{?xscount}%{?xshash}
+%global package_srccommit r3-8-6
+
 Summary: Rotates, compresses, removes and mails system log files
 Name: logrotate
 Version: 3.8.6
-Release: 17.xs1.0.1
+Release: %{?xsrel}%{?dist}
 License: GPL+
 Group: System Environment/Base
 URL: https://github.com/logrotate/logrotate
-#Source: https://fedorahosted.org/releases/l/o/logrotate/logrotate-%{version}.tar.gz
-
-Source0: https://code.citrite.net/rest/archive/latest/projects/XSU/repos/logrotate/archive?at=r3-8-6&format=tar.gz&prefix=logrotate-3.8.6#/logrotate-3.8.6.tar.gz
-Source1: SOURCES/logrotate/rwtab
-Patch0: SOURCES/logrotate/logrotate-3.8.6-force.patch
-Patch1: SOURCES/logrotate/logrotate-3.8.6-r465.patch
-Patch2: SOURCES/logrotate/logrotate-3.8.6-sortglob.patch
-Patch3: SOURCES/logrotate/logrotate-3.8.6-r460.patch
-Patch4: SOURCES/logrotate/logrotate-3.8.6-compress-subject.patch
-Patch5: SOURCES/logrotate/logrotate-3.8.6-olddircopy.patch
-Patch6: SOURCES/logrotate/logrotate-3.8.6-state-clean.patch
-Patch7: SOURCES/logrotate/logrotate-3.8.6-statusfile.patch
-Patch9: SOURCES/logrotate/logrotate-3.8.6-diagnostic.patch
-Patch10: SOURCES/logrotate/logrotate-3.8.6-olddir-missingok.patch
-Patch11: SOURCES/logrotate/logrotate-3.8.6-longdate-crash.patch
-Patch12: SOURCES/logrotate/logrotate-3.8.6-createolddir.patch
-Patch13: SOURCES/logrotate/logrotate-3.8.6-selinux.patch
-Patch14: SOURCES/logrotate/logrotate-3.8.6-su-username.patch
-Patch15: SOURCES/logrotate/logrotate-3.8.6-copy-and-copytruncate.patch
-Patch16: SOURCES/logrotate/logrotate-3.8.6-weekly.patch
-Patch17: SOURCES/logrotate/logrotate-3.8.6-config-mode-err.patch
-Patch18: SOURCES/logrotate/logrotate-3.8.6-upstream-url.patch
-Patch19: SOURCES/logrotate/logrotate-3.8.6-monthly-dst.patch
-Patch20: SOURCES/logrotate/logrotate-3.8.6-unlink-on-failure.patch
-
-Patch21: 0001-createOutputFile-rename-already-existing-file.patch
-Patch22: remove-tests-which-break-on-overlayfs
-
-Provides: gitsha(https://code.citrite.net/rest/archive/latest/projects/XSU/repos/logrotate/archive?at=r3-8-6&format=tar.gz&prefix=logrotate-3.8.6#/logrotate-3.8.6.tar.gz) = afc48fb5fc0c159dbfd48d19ddea57cc1ba436b6
-Provides: gitsha(https://code.citrite.net/rest/archive/latest/projects/XSU/repos/logrotate.centos/archive?at=imports%2Fc7%2Flogrotate-3.8.6-17.el7&format=tar.gz#/logrotate-3.8.6.centos.tar.gz) = 9b6d9a7c9dfa87a4096450ba21f2ff499be103e9
-Provides: gitsha(https://code.citrite.net/rest/archive/latest/projects/XS/repos/logrotate.pg/archive?at=v1.0.1&format=tar#/logrotate-v1.0.1.pg.tar) = 2f4fc5ba0640e588daefde7a7d4b69fc0bb4ff80
-
-
-# fix #1381719 - make /var/lib/logrotate/logrotate.status the default state file
-
-# fix #1192936 - provide diagnostic in case log does not need rotating
-
-# fix #1375638 - make olddir respect the missingok flag
-
-# fix #1369438 - heap buffer overflow when using long date format
-
-# fix #1377335 - make 'createolddir' preserve sticky bit
-
-# fix #1374331 - preserve SELinux context with 'compress' and 'sharedscripts'
-
-# fix #1387533 - make 'su' directive accept usernames starting with digits
-
-# fix #1461907 - make 'copy' and 'copytruncate' work together
-
-# fix #1465720 - trigger weekly rotations more predictably
-
-# fix #1472984 - improve the error message for bad config file mode
-
-# fix #1483800 - update references to project page
-
-# fix #1556993 - premature monthly rotation due to DST switch
-
-# fix #1374550 - unlink destination file when rotation fails
+#Source: https://fedorahosted.org/releases/l/o/logrotate/logrotate-%%{version}.tar.gz
+Source0: logrotate-3.8.6.tar.gz
+Source1: rwtab
+Patch0: logrotate-3.8.6-force.patch
+Patch1: logrotate-3.8.6-r465.patch
+Patch2: logrotate-3.8.6-sortglob.patch
+Patch3: logrotate-3.8.6-r460.patch
+Patch4: logrotate-3.8.6-compress-subject.patch
+Patch5: logrotate-3.8.6-olddircopy.patch
+Patch6: logrotate-3.8.6-state-clean.patch
+Patch7: logrotate-3.8.6-statusfile.patch
+Patch8: logrotate-3.8.6-diagnostic.patch
+Patch9: logrotate-3.8.6-olddir-missingok.patch
+Patch10: logrotate-3.8.6-longdate-crash.patch
+Patch11: logrotate-3.8.6-createolddir.patch
+Patch12: logrotate-3.8.6-selinux.patch
+Patch13: logrotate-3.8.6-su-username.patch
+Patch14: logrotate-3.8.6-copy-and-copytruncate.patch
+Patch15: logrotate-3.8.6-weekly.patch
+Patch16: logrotate-3.8.6-config-mode-err.patch
+Patch17: logrotate-3.8.6-upstream-url.patch
+Patch18: logrotate-3.8.6-monthly-dst.patch
+Patch19: logrotate-3.8.6-unlink-on-failure.patch
+Patch20: 0001-createOutputFile-rename-already-existing-file.patch
+Patch21: remove-tests-which-break-on-overlayfs
 
 Requires: coreutils >= 5.92 popt
 BuildRequires: libselinux-devel popt-devel libacl-devel acl
+%{?_cov_buildrequires}
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 %description
@@ -81,9 +55,10 @@ log files on your system.
 
 %prep
 %autosetup -p1
+%{?_cov_prepare}
 
 %build
-make %{?_smp_mflags} RPM_OPT_FLAGS="$RPM_OPT_FLAGS" WITH_SELINUX=yes WITH_ACL=yes
+%{?_cov_wrap} make %{?_smp_mflags} RPM_OPT_FLAGS="$RPM_OPT_FLAGS" WITH_SELINUX=yes WITH_ACL=yes
 
 %check
 make test
@@ -101,6 +76,8 @@ install -p -m 755 examples/logrotate.cron $RPM_BUILD_ROOT/%{_sysconfdir}/cron.da
 # Make sure logrotate is able to run on read-only root
 mkdir -p $RPM_BUILD_ROOT/%{_sysconfdir}/rwtab.d
 install -m644 %{SOURCE1} $RPM_BUILD_ROOT%{_sysconfdir}/rwtab.d/logrotate
+
+%{?_cov_install}
 
 %pre
 # If /var/lib/logrotate/logrotate.status does not exist, create it and copy
@@ -128,7 +105,18 @@ rm -rf $RPM_BUILD_ROOT
 %attr(0644, root, root) %ghost %verify(not size md5 mtime) %{_localstatedir}/lib/logrotate/logrotate.status
 %config(noreplace) %{_sysconfdir}/rwtab.d/logrotate
 
+%{?_cov_results_package}
+
 %changelog
+* Fri Feb 11 2022 Ross Lagerwall <ross.lagerwall@citrix.com> - 3.8.6-20
+- CP-38416: Enable static analysis
+
+* Fri Dec 04 2020 Ross Lagerwall <ross.lagerwall@citrix.com> - 3.8.6-19
+- CP-35517: Rebuild for koji
+
+* Fri Dec 06 2019 Tim Smith <tim.smith@citrix.com> - 3.8.6-18
+- Dropped xs from release
+
 * Wed Nov 06 2019 Tim Smith <tim.smith@citrix.com> - 3.8.6-17.xs1.0.1
 - CA-330296: Temporarily disable tests which fail on overlayfs
 
@@ -261,7 +249,7 @@ rm -rf $RPM_BUILD_ROOT
 - fix #708367 - fixed mail directive parsing
 
 * Mon Mar 28 2011 Jan Kaluza <jkaluza@redhat.com> 3.7.9-9
-- fix #689061 - added Url 
+- fix #689061 - added Url
 
 * Mon Mar 21 2011 Jan Kaluza <jkaluza@redhat.com> 3.7.9-8
 - fix #688520 - fixed CVE-2011-1154, CVE-2011-1155 and CVE-2011-1098
@@ -387,7 +375,7 @@ rm -rf $RPM_BUILD_ROOT
 - add error checking before running prerotate and postrotate scripts
 
 * Thu Mar 29 2007 Peter Vrabec <pvrabec@redhat.com> 3.7.5-2
-- fix error hadnling after prerotate, postrotate, firstaction 
+- fix error hadnling after prerotate, postrotate, firstaction
   script failure. (http://qa.mandriva.com/show_bug.cgi?id=29979)
 
 * Thu Mar 01 2007 Peter Vrabec <pvrabec@redhat.com> 3.7.5-1
@@ -487,7 +475,7 @@ rm -rf $RPM_BUILD_ROOT
 - do not run compression program in debug mode (#166912)
 
 * Wed Sep 07 2005 Peter Vrabec <pvrabec@redhat.com> 3.7.2-3
-- even when sharedscript option used, do postrotate 
+- even when sharedscript option used, do postrotate
   script before compress (#167575)
 
 * Wed Aug 17 2005 Peter Vrabec <pvrabec@redhat.com> 3.7.2-2
