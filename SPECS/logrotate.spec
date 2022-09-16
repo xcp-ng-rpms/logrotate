@@ -40,6 +40,7 @@ Patch21: remove-tests-which-break-on-overlayfs
 Requires: coreutils >= 5.92 popt
 BuildRequires: libselinux-devel popt-devel libacl-devel acl
 %{?_cov_buildrequires}
+BuildRequires: gcc
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 %description
