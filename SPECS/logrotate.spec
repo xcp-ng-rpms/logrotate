@@ -1,6 +1,6 @@
-%global package_speccommit 87cf13be177f6da9eced6bedaedee8a73390f9a7
+%global package_speccommit a31cd7615f4328fb91316882d037fc7887868314
 %global usver 3.8.6
-%global xsver 20
+%global xsver 21
 %global xsrel %{xsver}%{?xscount}%{?xshash}
 %global package_srccommit r3-8-6
 
@@ -36,6 +36,7 @@ Patch18: logrotate-3.8.6-monthly-dst.patch
 Patch19: logrotate-3.8.6-unlink-on-failure.patch
 Patch20: 0001-createOutputFile-rename-already-existing-file.patch
 Patch21: remove-tests-which-break-on-overlayfs
+Patch22: xs_settings.patch
 
 Requires: coreutils >= 5.92 popt
 BuildRequires: libselinux-devel popt-devel libacl-devel acl
@@ -100,7 +101,7 @@ rm -rf $RPM_BUILD_ROOT
 %attr(0644, root, root) %{_mandir}/man8/logrotate.8*
 %attr(0644, root, root) %{_mandir}/man5/logrotate.conf.5*
 %attr(0700, root, root) %config(noreplace) %{_sysconfdir}/cron.daily/logrotate
-%attr(0644, root, root) %config(noreplace) %{_sysconfdir}/logrotate.conf
+%attr(0644, root, root) %config %{_sysconfdir}/logrotate.conf
 %attr(0755, root, root) %dir %{_sysconfdir}/logrotate.d
 %attr(0755, root, root) %dir %{_localstatedir}/lib/logrotate
 %attr(0644, root, root) %ghost %verify(not size md5 mtime) %{_localstatedir}/lib/logrotate/logrotate.status
@@ -109,6 +110,10 @@ rm -rf $RPM_BUILD_ROOT
 %{?_cov_results_package}
 
 %changelog
+* Tue May 07 2024 Frediano Ziglio <frediano.ziglio@cloud.com> - 3.8.6-21
+- Use XS settings by default
+- CP-49083: Do not rotate logs if empty
+
 * Fri Feb 11 2022 Ross Lagerwall <ross.lagerwall@citrix.com> - 3.8.6-20
 - CP-38416: Enable static analysis
 
@@ -229,7 +234,7 @@ rm -rf $RPM_BUILD_ROOT
 * Mon Aug 08 2011 Jan Kaluza <jkaluza@redhat.com> 3.8.0-5
 - fix #723797 - added maxsize option
 
-* Wed Aug 01 2011 Jan Kaluza <jkaluza@redhat.com> 3.8.0-4
+* Mon Aug 01 2011 Jan Kaluza <jkaluza@redhat.com> 3.8.0-4
 - fix #726980 - work properly when acl_get_fd is supported,
   but acl_set_fd is not
 
@@ -554,7 +559,7 @@ rm -rf $RPM_BUILD_ROOT
 * Thu Jul 24 2003 Elliot Lee <sopwith@redhat.com> 3.6.10-1
 - Fix #100546, change selinux port.
 
-* Wed Jul 18 2003 Dan Walsh <dwalsh@redhat.com> 3.6.9-2
+* Fri Jul 18 2003 Dan Walsh <dwalsh@redhat.com> 3.6.9-2
 - Port to SELinux 2.5
 
 * Wed Jul 09 2003 Elliot Lee <sopwith@redhat.com> 3.6.9-1
