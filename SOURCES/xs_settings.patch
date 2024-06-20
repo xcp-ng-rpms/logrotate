@@ -1,0 +1,35 @@
+diff --git a/examples/logrotate-default b/examples/logrotate-default
+index 7da6bb7..a41c1aa 100644
+--- a/examples/logrotate-default
++++ b/examples/logrotate-default
+@@ -1,18 +1,22 @@
+ # see "man logrotate" for details
+-# rotate log files weekly
+-weekly
++# rotate log files daily
++daily
+ 
+-# keep 4 weeks worth of backlogs
+-rotate 4
++# keep one months worth of backlogs
++rotate 31
+ 
+ # create new (empty) log files after rotating old ones
+ create
+ 
+-# use date as a suffix of the rotated file
+-dateext
++# rotate if log reaches 100 MiB
++maxsize 104857600
+ 
+-# uncomment this if you want your log files compressed
+-#compress
++# compress log files
++compress
++delaycompress
++
++# do not rotate logs if logs are empty
++notifempty
+ 
+ # RPM packages drop log rotation information into this directory
+ include /etc/logrotate.d
